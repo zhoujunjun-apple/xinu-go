@@ -1,5 +1,7 @@
 package include
 
+import "math"
+
 const (
 	// NQENT is the default # of queue entries:
 	// 1 per process plus 2 for ready list plus 2 for sleep list plus 2 per semaphore
@@ -7,9 +9,9 @@ const (
 	// EMPTY is the NULL value for qnext or qprev index
 	EMPTY Qid16 = -1
 	// MAXKEY is the max key that can be stored in queue
-	MAXKEY int = 0x7FFFFFFF
+	MAXKEY int32 = math.MaxInt32
 	// MINKEY is the min key that can be stored in queue
-	MINKEY int = 0x80000000
+	MINKEY int32 = math.MinInt32
 )
 
 // Qentry struct represents a entry struction in the queue
@@ -27,6 +29,10 @@ type Qentry struct {
 // 2: head and tail node for sleep list;
 // 2*NSEM: head and tail node for each semaphore;
 var Queuetab [NQENT]Qentry
+
+// nextqid represents the next list in Queuetab to use.
+// used only in NewQueue function
+var nextqid Qid16 = Qid16(NPROC)
 
 // QueueHead function returns the index of head node of queue q
 func QueueHead(q Qid16) Qid16 {
@@ -143,4 +149,50 @@ func Dequeue(q Qid16) (Pid32, error) {
 	Queuetab[pid].Qnext = EMPTY
 
 	return pid, OK
+}
+
+// Insert function inserts a process(pid) into a queue(q) in descending key order
+func Insert(pid Pid32, q Qid16, key int32) error {
+	if IsBadPid(pid) || IsBadQid(q) {
+		return ErrSYSERR
+	}
+
+	// runs through items in queue(q) until found the postion to insert
+	curr := FirstID(q)
+	for Queuetab[curr].Qkey >= key {
+		curr = Queuetab[curr].Qnext
+	}
+
+	// insert process(pid) between prev node and curr node
+	prev := Queuetab[curr].Qprev
+	Queuetab[pid].Qprev = prev
+	Queuetab[pid].Qnext = curr
+	Queuetab[prev].Qnext = Qid16(pid)
+	Queuetab[curr].Qprev = Qid16(pid)
+
+	return OK
+}
+
+// NewQueue function allocate and initialize a queue in the global queue table
+func NewQueue() (Qid16, error) {
+	q := nextqid
+	if q >= Qid16(NQENT) { // check for table overflow
+		return NoneQid, ErrSYSERR
+	}
+
+	// increment index for next call after allocating nextqid as
+	// q's head node, and nextqid+1 as q's tail node
+	nextqid += 2
+
+	// initialize head and tail nodes to form an empty queue
+	// the Qkey field will be used in priority descending queue
+	Queuetab[QueueHead(q)].Qnext = QueueTail(q)
+	Queuetab[QueueHead(q)].Qprev = EMPTY
+	Queuetab[QueueHead(q)].Qkey = MAXKEY // make sure the head node has the maximum Qkey
+
+	Queuetab[QueueTail(q)].Qprev = QueueHead(q)
+	Queuetab[QueueTail(q)].Qnext = EMPTY
+	Queuetab[QueueTail(q)].Qkey = MINKEY // make sure the tail node has the minimum Qkey
+
+	return q, OK
 }

@@ -11,6 +11,9 @@ type Pid32 int32
 // NonePid represent the universal invalid process id
 const NonePid Pid32 = -1
 
+// NoneQid represent the universal invalid queue id
+const NoneQid Qid16 = -1
+
 /* Universal return constants */
 var (
 	// OK: system call ok
