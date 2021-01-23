@@ -6,6 +6,7 @@ For better understanding the underlying principle of Operating System, I reimple
 
 The reimplemented modules include:<br>
 1. process queue. Gather multiple queues inside a statically allocated array ; <br>
+2. process management, including process rescheduling, rescheduling defer; <br>
 
 Some modifications compared with the original [X86 version Xinu](https://xinu.cs.purdue.edu/files/Xinu-code-Galileo.tar.gz) : <br>
 1. Header files and C source code files, which share some similarity in functionality, have been combined into a single .go file. So most .c files under the 'system' directory have combined into .go files under the 'include' directory ; <br>
