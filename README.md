@@ -8,7 +8,7 @@ The reimplemented modules include:<br>
 1. process queue. Gather multiple queues inside a statically allocated array ; <br>
 
 Some modifications compared with the original [X86 version Xinu](https://xinu.cs.purdue.edu/files/Xinu-code-Galileo.tar.gz) : <br>
-1. Header files and C source code files, which share some similarity in functionality, have been combined into a single .go file ; <br>
+1. Header files and C source code files, which share some similarity in functionality, have been combined into a single .go file. So most .c files under the 'system' directory have combined into .go files under the 'include' directory ; <br>
     eg: The functions and struct defination from queue.h, queue.c and getitem.c have been reimplement in queue.go out of simplicity. <br>
 2.  All the uniersal return constants have been redefined by error type out of consideration for the (return values, error indication) pattern in golang ; <br>
 3. The first letter of most of  names, including function name, constant, global variables, customed type, struct field etc,  have been capitalized according to the naming convention of golang; <br>
