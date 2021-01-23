@@ -23,6 +23,9 @@ const NonePid Pid32 = -1
 // NoneQid represent the universal invalid queue id
 const NoneQid Qid16 = -1
 
+// QUANTUM is the time slice in milliseconds
+const QUANTUM uint8 = 2
+
 /* Universal return constants */
 var (
 	// OK: system call ok
