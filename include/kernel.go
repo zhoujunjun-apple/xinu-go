@@ -5,8 +5,17 @@ import "fmt"
 // Qid16 is the process queue ID
 type Qid16 int16
 
+// Pri16 is the process priority
+type Pri16 int16
+
 // Pid32 is the process ID
 type Pid32 int32
+
+// Sid32 is the semaphore ID
+type Sid32 int32
+
+// Umsg32 is the message type
+type Umsg32 uint32
 
 // NonePid represent the universal invalid process id
 const NonePid Pid32 = -1
