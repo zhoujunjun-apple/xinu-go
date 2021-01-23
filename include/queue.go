@@ -5,7 +5,7 @@ const (
 	// 1 per process plus 2 for ready list plus 2 for sleep list plus 2 per semaphore
 	NQENT int = NPROC + 4 + 2*NSEM
 	// EMPTY is the NULL value for qnext or qprev index
-	EMPTY int = -1
+	EMPTY Qid16 = -1
 	// MAXKEY is the max key that can be stored in queue
 	MAXKEY int = 0x7FFFFFFF
 	// MINKEY is the min key that can be stored in queue
@@ -73,4 +73,74 @@ func LastKey(q Qid16) int32 {
 // A valid queue id should in [NPROC, NQENT) range
 func IsBadQid(q Qid16) bool {
 	return (int(q) < NPROC) || (int(q) > NQENT-1)
+}
+
+// GetItem function removes a process(pid) from an arbitrary point in a queue, at which
+// pid is resides before pid process calls this function
+func GetItem(pid Pid32) Pid32 {
+	next := Queuetab[pid].Qnext
+	prev := Queuetab[pid].Qprev
+
+	// kick out the proces pid
+	Queuetab[prev].Qnext = next
+	Queuetab[next].Qprev = prev
+
+	return pid
+}
+
+// GetFirst function removes a process from the front of a queue
+func GetFirst(q Qid16) (Pid32, error) {
+	if IsEmpty(q) {
+		return NonePid, ErrEMPTY
+	}
+
+	head := QueueHead(q)
+	return GetItem(Pid32(Queuetab[head].Qnext)), OK
+}
+
+// GetLast function removes a process from the tail of a queue
+func GetLast(q Qid16) (Pid32, error) {
+	if IsEmpty(q) {
+		return NonePid, ErrEMPTY
+	}
+
+	tail := QueueTail(q)
+	return GetItem(Pid32(Queuetab[tail].Qprev)), OK
+}
+
+// Enqueue function inserts a process pid at the tail of queue q
+func Enqueue(pid Pid32, q Qid16) (Pid32, error) {
+	if IsBadQid(q) || IsBadPid(pid) {
+		return NonePid, ErrSYSERR
+	}
+
+	tail := QueueTail(q)
+	prev := Queuetab[tail].Qprev
+
+	// insert just before tail node
+	Queuetab[pid].Qnext = tail
+	Queuetab[pid].Qprev = prev
+	Queuetab[prev].Qnext = Qid16(pid)
+	Queuetab[tail].Qprev = Qid16(pid)
+
+	return pid, OK
+}
+
+// Dequeue function remove and return the first process on queue q
+func Dequeue(q Qid16) (Pid32, error) {
+	if IsBadQid(q) {
+		return NonePid, ErrSYSERR
+	} else if IsEmpty(q) {
+		return NonePid, ErrEMPTY
+	}
+
+	pid, err := GetFirst(q)
+	if err != OK {
+		return NonePid, err
+	}
+
+	Queuetab[pid].Qprev = EMPTY
+	Queuetab[pid].Qnext = EMPTY
+
+	return pid, OK
 }
