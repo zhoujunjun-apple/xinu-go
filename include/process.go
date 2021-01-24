@@ -4,6 +4,7 @@ process.go defines process's operating functions and constants
 files combined from the original X86 version include:
 process.h
 process.c
+ready.c
 
 */
 
@@ -73,4 +74,18 @@ var Proctab []ProcEnt
 // False: pid is valid;
 func IsBadPid(pid Pid32) bool {
 	return pid < 0 || int(pid) >= NPROC || Proctab[pid].PrState == PrFree
+}
+
+// Ready function set process state to indicate ready and add to ready list, then rescheduling
+func Ready(pid Pid32) error {
+	if IsBadPid(pid) {
+		return ErrSYSERR
+	}
+
+	prptr := &Proctab[pid]
+	prptr.PrState = PrReady
+	Insert(pid, ReadyList, int32(prptr.PrPrio))
+	Resched()
+
+	return OK
 }
