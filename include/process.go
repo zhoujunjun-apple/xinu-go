@@ -89,3 +89,54 @@ func Ready(pid Pid32) error {
 
 	return OK
 }
+
+// Resume function unsuspend a process, making it ready, return its previous priority
+func Resume(pid Pid32) (Pri16, error) {
+	mask := Disable()   // close interrupt
+	defer Restore(mask) // make sure interrupt mask is restored before return
+
+	if IsBadPid(pid) {
+		return NonePri, ErrSYSERR
+	}
+
+	prpter := &Proctab[pid]
+	if prpter.PrState != PrSusp { // resume only valid for SUSPEND state
+		return NonePri, ErrSYSERR
+	}
+
+	// record priority on current stack since Ready could cause a rescheduling
+	prio := prpter.PrPrio
+	Ready(pid)
+
+	return prio, OK
+}
+
+// Suspend function suspend a process, placing it in hibernation(休眠)
+func Suspend(pid Pid32) (Pri16, error) {
+	mask := Disable()
+	defer Restore(mask)
+
+	// the null process cannot be suspended
+	if IsBadPid(pid) || pid == Pid32(NULLProc) {
+		return NonePri, ErrSYSERR
+	}
+
+	// only suspend a process that in current or ready
+	prptr := &Proctab[pid]
+	if prptr.PrState != PrCurr && prptr.PrState != PrReady {
+		return NonePri, ErrSYSERR
+	}
+
+	// in ready
+	if prptr.PrState == PrReady {
+		GetItem(pid)           // remove it from the ready list
+		prptr.PrState = PrSusp // update its state to SUSPEND
+	} else { // in current
+		prptr.PrState = PrSusp // update its state to SUSPEND
+		Resched()              // rescheduling another process to execute
+	}
+
+	// when it resume execution, it return from the Resched, and start from here
+	prio := prptr.PrPrio
+	return prio, OK
+}

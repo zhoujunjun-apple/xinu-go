@@ -17,11 +17,17 @@ type Sid32 int32
 // Umsg32 is the message type
 type Umsg32 uint32
 
+// IntMask is the interrupt mask type
+type IntMask uint32
+
 // NonePid represent the universal invalid process id
 const NonePid Pid32 = -1
 
 // NoneQid represent the universal invalid queue id
 const NoneQid Qid16 = -1
+
+// NonePri represent the universal invalid priority value
+const NonePri Pri16 = -11111
 
 // QUANTUM is the time slice in milliseconds
 const QUANTUM uint8 = 2
