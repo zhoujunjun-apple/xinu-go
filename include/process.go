@@ -5,6 +5,13 @@ files combined from the original X86 version include:
 process.h
 process.c
 ready.c
+resume.c
+suspend.c
+create.c
+kill.c
+getpid.c
+getprio.c
+chprio.c
 
 */
 
@@ -139,4 +146,39 @@ func Suspend(pid Pid32) (Pri16, error) {
 	// when it resume execution, it return from the Resched, and start from here
 	prio := prptr.PrPrio
 	return prio, OK
+}
+
+// GetPid function return the current process's id
+func GetPid() Pid32 {
+	return CurrPid
+}
+
+// GetPrio function return the current process's priority
+func GetPrio(pid Pid32) (Pri16, error) {
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadPid(pid) {
+		return NonePri, ErrSYSERR
+	}
+
+	prio := Proctab[pid].PrPrio
+
+	return prio, OK
+}
+
+// ChPrio function change the scheduling priority of a process(pid) to np, returning the old priority
+func ChPrio(pid Pid32, np Pri16) (Pri16, error) {
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadPid(pid) {
+		return NonePri, ErrSYSERR
+	}
+
+	prptr := &Proctab[pid]
+	op := prptr.PrPrio
+	prptr.PrPrio = np
+
+	return op, OK
 }
