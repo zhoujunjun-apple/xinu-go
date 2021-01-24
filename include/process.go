@@ -59,9 +59,9 @@ type ProcEnt struct {
 	PrState uint16 // process state
 	PrPrio  Pri16  // process priority
 
-	PrStkPtr  *byte  // saved stack pointer
-	PrStkBase *byte  // base of run time stack
-	PrStkLen  uint32 // stack length in bytes
+	PrStkPtr  *uint32 // saved stack pointer
+	PrStkBase *uint32 // base of run time stack
+	PrStkLen  uint32  // stack length in bytes
 
 	PrName   [PNMLen]byte // process name
 	PrSem    Sid32        // semaphore on which process waits
@@ -75,6 +75,10 @@ type ProcEnt struct {
 
 // Proctab is the process table
 var Proctab []ProcEnt
+
+// nextpid represet the position in table to try or one beyond end of table
+// used by NewPid(). Initialization value is 1 because process #0 is the null process
+var nextpid Pid32 = 1
 
 // IsBadPid function checks if pid is valid or not assuming interrupts are disabled
 // True: pid is invalid;
@@ -181,4 +185,119 @@ func ChPrio(pid Pid32, np Pri16) (Pri16, error) {
 	prptr.PrPrio = np
 
 	return op, OK
+}
+
+// Create function create a process to start running a function on X86
+// The basic idea is that Create() builds an image of the process as if
+// it had been stopped while running. Specifically, Create() forms a saved
+// environment on the process's stack as if the specified function had been called.
+// funcAddr: address of the function at which the process should start execution;
+// ssize: stack size in words;
+// priority: process priority > 0;
+// name: name for debugging;
+// nargs: number of args that follow. (I think those args are used by function at funcAddr)
+// When this function is called, the stack(NOT the one allocated for new process)
+// as follows (according to the C calling convention):
+//
+// | (stack bottom) |
+// | arg #nargs     | -----
+// | .....          |   |  those args will be copy from
+// | arg #2         |   |  this stack to the new process's stack
+// | arg #1         | -----
+// | nargs          |
+// | name           |
+// | priority       |
+// | ssize          |
+// | funcAddr       |
+// | ret addr       | <- pushed by call Create()
+//
+// When the new process's stack is formed, the stack look as follows:
+//
+// | (stack bottom) |
+// | STACKMAGIC     |
+// | arg #nargs     |-----
+// | .....          |  | those args copied from the previous stack
+// | arg #2         |  |
+// | arg #1         |-----
+// | INITRET        | <- called when new process(started at funcAddr) exit. =UserRet()
+// | funcAddr       |
+// | ebp            |
+// | 0x0020         |
+// | 0(eax)         |
+// | 0(ecx)         |
+// | 0(edx)         |
+// | 0(ebx)         |
+// | 0(esp)         |
+// | ebp            |
+// | 0(esi)         |
+// | 0(edi)         |
+// |                | <- pointed by PrStkPtr field in new process struct
+//
+func Create(funcAddr *byte, ssize uint32, priority Pri16, name [PNMLen]byte, nargs uint32) (Pid32, error) {
+	mask := Disable()
+	defer Restore(mask)
+
+	if ssize < MINSTK {
+		ssize = MINSTK
+	}
+
+	ssize = uint32(RoundMB(int32(ssize)))
+
+	// allocate pid and stack memory for new process
+	pid, pidErr := NewPid()
+	saddr, saddrErr := GetStk(ssize)
+
+	if priority < 1 || pidErr != OK || saddrErr != OK {
+		return NonePid, ErrSYSERR
+	}
+
+	// pid is allocated, stack memory is allocated
+
+	PrCount++
+	prptr := &Proctab[pid]
+
+	// initialize process table entry for new process pid
+	prptr.PrState = PrSusp
+	prptr.PrPrio = priority
+	prptr.PrStkBase = saddr
+	prptr.PrStkLen = ssize
+	prptr.PrName = name
+	prptr.PrSem = -1
+	prptr.PrParent = GetPid()
+	prptr.PrHasMsg = false
+
+	prptr.PrDesc[0] = CONSOLE // stdin
+	prptr.PrDesc[1] = CONSOLE // stdout
+	prptr.PrDesc[2] = CONSOLE // stderr
+
+	// initialize stack as if the new process was called
+	*saddr = StackMagic
+
+	// push arguments
+	// TODO: copy args from current stack to the new process's stack
+	// TODO: push on return address: INITRET
+
+	// the following entries on the stack must match what  ctxsw
+	// expects a saved process state to contain: ret address,
+	// ebp, interrupt mask, flags, registers, and an old SP
+	// TODO: how to operate pointer on golang!!
+
+	return pid, OK
+}
+
+// NewPid function returns a new free process ID
+func NewPid() (Pid32, error) {
+	var pid Pid32
+
+	for i := 0; i < NPROC; i++ {
+		nextpid %= Pid32(NPROC)
+		if Proctab[nextpid].PrState == PrFree {
+			pid = nextpid
+			nextpid++
+			return pid, OK
+		}
+		nextpid++
+	}
+
+	return NonePid, ErrSYSERR
 }

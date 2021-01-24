@@ -69,7 +69,7 @@ func Resched() {
 }
 
 // ctxsw function wraps the ctxsw written with Assembly language in ctxsw.S
-func ctxsw(oldsp, newsp *byte) {
+func ctxsw(oldsp, newsp *uint32) {
 	// TODO: link ctxsw.S with golang
 	fmt.Printf("context swithched from %v to %v\n", oldsp, newsp)
 }

@@ -7,4 +7,7 @@ const (
 	NPROC int = 100
 	// NSEM is the maximum number of semaphores
 	NSEM int = 100
+
+	// CONSOLE it the tty type device
+	CONSOLE int16 = 0 
 )

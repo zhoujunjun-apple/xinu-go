@@ -32,6 +32,9 @@ const NonePri Pri16 = -11111
 // QUANTUM is the time slice in milliseconds
 const QUANTUM uint8 = 2
 
+// MINSTK is the minimum stack size in bytes
+const MINSTK uint32 = 400
+
 /* Universal return constants */
 var (
 	// OK: system call ok
