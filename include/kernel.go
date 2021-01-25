@@ -1,6 +1,9 @@
 package include
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // Qid16 is the process queue ID
 type Qid16 int16
@@ -31,6 +34,9 @@ const NonePri Pri16 = -11111
 
 // NoneSem represent the universal invalid semaphore id
 const NoneSem Sid32 = -1
+
+// NoneMsg represent the universal invalid message content
+const NoneMsg Umsg32 = math.MaxUint32
 
 // QUANTUM is the time slice in milliseconds
 const QUANTUM uint8 = 2

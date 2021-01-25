@@ -5,6 +5,9 @@ files combined from the original X86 version include:
 semaphore.h
 wait.c
 signal.c
+semdelete.c
+semreset.c
+semcreate.c
 
 */
 

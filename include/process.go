@@ -19,14 +19,14 @@ package include
 
 // process state constants
 const (
-	PrFree   uint16 = 0 // process table entry is unused
-	PrCurr   uint16 = 1 // process is currently running
-	PrReady  uint16 = 2 // process is on ready queue
-	PrRecv   uint16 = 3 // process waiting for message
-	PrSleep  uint16 = 4 // process is sleeping
-	PrSusp   uint16 = 5 // process is suspended
-	PrWait   uint16 = 6 // process is on semaphore queue
-	PrRectim uint16 = 7 // process is receiving with timeout
+	PrFree    uint16 = 0 // process table entry is unused
+	PrCurr    uint16 = 1 // process is currently running
+	PrReady   uint16 = 2 // process is on ready queue
+	PrRecv    uint16 = 3 // process waiting for message
+	PrSleep   uint16 = 4 // process is sleeping
+	PrSusp    uint16 = 5 // process is suspended
+	PrWait    uint16 = 6 // process is on semaphore queue
+	PrRecTime uint16 = 7 // process is receiving with timeout
 )
 
 // miscellaneous
