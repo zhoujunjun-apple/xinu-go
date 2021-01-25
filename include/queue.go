@@ -4,7 +4,9 @@ import "math"
 
 const (
 	// NQENT is the default # of queue entries:
-	// 1 per process plus 2 for ready list plus 2 for sleep list plus 2 per semaphore
+	// 1 per process plus 2 for ready list 
+	// plus 2 for sleep list  (in clock.go)
+	// plus 2 per semaphore (in semaphore.go)
 	NQENT int = NPROC + 4 + 2*NSEM
 	// EMPTY is the NULL value for qnext or qprev index
 	EMPTY Qid16 = -1
