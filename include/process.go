@@ -17,6 +17,11 @@ chprio.c
 
 package include
 
+import (
+	"unsafe"
+	"reflect"
+)
+
 // process state constants
 const (
 	PrFree    uint16 = 0 // process table entry is unused
@@ -38,7 +43,7 @@ const (
 )
 
 // InitRet is the address to which process returns
-var InitRet = UserRet // TODO: get function address
+var InitRet uintptr = reflect.ValueOf(UserRet).Pointer()  // this may be wrong
 
 // process initialization constants
 const (
@@ -203,8 +208,8 @@ func ChPrio(pid Pid32, np Pri16) (Pri16, error) {
 // | arg #nargs     | -----
 // | .....          |   |  those args will be copy from
 // | arg #2         |   |  this stack to the new process's stack
-// | arg #1         | -----
-// | nargs          |
+// | arg #1         | ----- <- &nargs + 1 with Clang statement
+// | nargs          | <- &nargs
 // | name           |
 // | priority       |
 // | ssize          |
@@ -233,7 +238,7 @@ func ChPrio(pid Pid32, np Pri16) (Pri16, error) {
 // | 0(edi)         |
 // |                | <- pointed by PrStkPtr field in new process struct
 //
-func Create(funcAddr *byte, ssize uint32, priority Pri16, name [PNMLen]byte, nargs uint32) (Pid32, error) {
+func Create(funcAddr uintptr, ssize uint32, priority Pri16, name [PNMLen]byte, nargs uint32) (Pid32, error) {
 	mask := Disable()
 	defer Restore(mask)
 
@@ -272,17 +277,98 @@ func Create(funcAddr *byte, ssize uint32, priority Pri16, name [PNMLen]byte, nar
 
 	// initialize stack as if the new process was called
 	*saddr = StackMagic
+	savesp := uintptr(unsafe.Pointer(saddr))
 
 	// push arguments
-	// TODO: copy args from current stack to the new process's stack
-	// TODO: push on return address: INITRET
+
+	// Clang statement: a = (uint32*)(&nargs + 1)
+	a := uint32PtrAdd(&nargs, 1)  // a now is the address of start of args (args #1)
+
+	// Clang statement: a += nargs - 1;
+	a = uint32PtrAdd(a, nargs - 1)  // a now is the address of last of args (args #nargs)
+
+	// copy args from current stack to the new process's stack
+	for ; nargs > 0; nargs-- {
+		// Clang statement: *--saddr = *a--;
+
+		saddr = uint32PtrMinus(saddr, 1)  // --saddr
+		// copy argument value from current stack onto created process's stack
+		*saddr = *a
+		a = uint32PtrMinus(a, 1)  // a--
+	}
+
+	// push on the return address: INITRET
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = uint32(InitRet)
 
 	// the following entries on the stack must match what  ctxsw
 	// expects a saved process state to contain: ret address,
 	// ebp, interrupt mask, flags, registers, and an old SP
-	// TODO: how to operate pointer on golang!!
+	
+	// make the stack look like it's half-way through a call to ctxsw that "return" to the new process
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = uint32(funcAddr)
+
+	// this will be register ebp for process exit
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = uint32(savesp)
+
+	// start of frame for ctxsw
+	savesp = uintptr(unsafe.Pointer(saddr))
+
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = 0x00000200  // new process runs with interrupts enabled
+
+	// basically, the following emulates an X86 "pushal" instruction
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = 0  // %eax
+
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = 0  // %ecx
+
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = 0  // %edx
+
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = 0  // %ebx
+
+	pushsp := saddr // remember this location
+
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = uint32(savesp) // %ebp while finishing ctxsw
+
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = 0 // %esi
+
+	saddr = uint32PtrMinus(saddr, 1)
+	*saddr = 0  // %edi
+
+	prptr.PrStkPtr = saddr  // record the new process's stack pointer onto PrStkPtr field
+	*pushsp = uint32(uintptr(unsafe.Pointer(saddr)))
 
 	return pid, OK
+}
+
+// uint32PtrMinus function do 'old = old - gap' like in Clang
+// This is actually one of six unsafe pointer use pattern (https://go101.org/article/unsafe.html)
+func uint32PtrMinus(old *uint32, gap uint32) *uint32 {
+	var dummy uint32 = 1
+
+	unsafeOld := unsafe.Pointer(old)
+	// DO NOT do: _old := uintptr(unsafeOld) - unsafe.Sizeof(dummy) * uintptr(gap)
+	ret := (*uint32)(unsafe.Pointer(uintptr(unsafeOld) - unsafe.Sizeof(dummy) * uintptr(gap)))
+
+	return ret
+}
+
+// uint32PtrAdd function do 'old = old + gap' like in Clang
+func uint32PtrAdd(old *uint32, gap uint32) *uint32 {
+	var dummy uint32 = 1
+
+	unsafeOld := unsafe.Pointer(old)
+	ret := (*uint32)(unsafe.Pointer(uintptr(unsafeOld) + unsafe.Sizeof(dummy) * uintptr(gap)))
+
+	return ret
 }
 
 // NewPid function returns a new free process ID
