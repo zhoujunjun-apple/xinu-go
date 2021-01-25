@@ -21,6 +21,7 @@ sleep.c
 wakeup.c
 sleepms.c
 recvtime.c
+clkhandler.c
 
 */
 
@@ -32,10 +33,16 @@ import "math"
 const MAXSECONDS uint32 = math.MaxUint32 / 1000
 
 // Preempt is the preemption counter
-var Preempt uint8
+var Preempt uint8 = QUANTUM
 
-// sleepq is the queue id of the global sleep queue
+// sleepq is the queue id of the global sleep queue, initialized with NewQueue()
 var sleepq Qid16
+
+// count1000 represent milliseconds since last clock tick
+var count1000 uint32 = 0
+
+// clktime represent seconds since boot
+var clktime uint32
 
 // InsertDelta function insert a process in delta list using delay as the key
 // pid: process id of to be inserted;
@@ -188,4 +195,33 @@ func RecvTime(maxWait int32) (Umsg32, error) {
 	}
 
 	return msg, OK
+}
+
+// ClkHandler is the hign level clock interrupt handler
+// NOTE: the clock tick is configured interrupt every 1 millisecond
+func ClkHandler() {
+	count1000++            // increament the ms counter, and see if a second has passed
+	if count1000 >= 1000 { // a second has passed
+		clktime++     // increment seconds count
+		count1000 = 0 // reset the local ms counter for the next second
+	}
+
+	// handle sleeping processes if any exist
+	if !IsEmpty(sleepq) {
+		qid := FirstID(sleepq)
+		Queuetab[qid].Qkey-- // 1 ms passed
+
+		// the count reaches zero, at least one process need be awaken
+		if Queuetab[qid].Qkey <= 0 {
+			Wakeup()
+		}
+	}
+
+	// decrement the preemption counter, and reschedule when
+	// remaining time reaches zero (time slice for current process is expired)
+	Preempt--
+	if Preempt <= 0 { // give change to another process to run
+		Preempt = QUANTUM
+		Resched()
+	}
 }

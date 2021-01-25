@@ -1,5 +1,8 @@
 /* intutils.go utils function about interrupt manager
 
+files combined from the original X86 version include:
+intutils.c
+
  */
 
 package include
