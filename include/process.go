@@ -307,3 +307,13 @@ func Kill(pid Pid32) error {
 	// TODO: implement it
 	return OK
 }
+
+// Yield function voluntarily relinquish the CPU
+func Yield() error {
+	mask := Disable()
+	defer Restore(mask)
+
+	Resched()
+
+	return OK
+}

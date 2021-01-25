@@ -23,6 +23,11 @@ sleep.c
 
 package include
 
+import "math"
+
+// MAXSECONDS is the max seconds per 32-bit msec
+const MAXSECONDS uint32 = math.MaxUint32 / 1000
+
 // Preempt is the preemption counter
 var Preempt uint8
 
@@ -67,5 +72,38 @@ func InsertDelta(pid Pid32, q Qid16, key int32) error {
 // Unsleep function removes a process from the sleep queue.
 func Unsleep(pid Pid32) error {
 	// TODO
+	return OK
+}
+
+// Sleep function delay the calling process 'delay' seconds
+func Sleep(delay uint32) error {
+	if delay > MAXSECONDS {
+		return ErrSYSERR
+	}
+
+	err := Sleepms(delay*1000)
+	return err
+}
+
+// Sleepms function delay the calling process 'delayms' milliseconds
+func Sleepms(delayms uint32) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	// if delay 0 ms, then try to yield the CPU
+	if delayms == 0 {
+		Yield()
+		return OK
+	}
+
+	// put the calling process into delta list
+	if err := InsertDelta(CurrPid, sleepq, int32(delayms)); err != OK {
+		return ErrSYSERR
+	}
+
+	// update its state and rescheduling
+	Proctab[CurrPid].PrState = PrSleep
+	Resched()
+
 	return OK
 }
