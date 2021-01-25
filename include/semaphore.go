@@ -53,7 +53,7 @@ func Wait(sem Sid32) error {
 	}
 
 	semptr.SCount--
-	
+
 	if semptr.SCount < 0 {  // semaphore is not enough, current process must wait
 		prptr := &Proctab[CurrPid]
 		prptr.PrState = PrWait
@@ -67,5 +67,31 @@ func Wait(sem Sid32) error {
 	}
 
 	// semaphore is enough or signaled from another process
+	return OK
+}
+
+// Signal function signal a semaphore, releasing a process if one is waiting
+func Signal(sem Sid32) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadSem(sem) {
+		return ErrSYSERR
+	}
+
+	semptr := &SemTab[sem]
+	if semptr.SState == SFree {
+		return ErrSYSERR
+	}
+
+	oldCount := semptr.SCount
+	semptr.SCount++
+
+	if oldCount < 0 { // oldCount processes are waiting on this semaphore
+		// need to release a waiting process from the semaphore waiting queue
+		p, _ := Dequeue(semptr.SQueue)
+		Ready(p)  // could cause a rescheduling
+	}
+
 	return OK
 }
