@@ -34,6 +34,38 @@ type SEntry struct {
 var SemTab []SEntry
 
 // IsBadSem function checks if semaphore id is bad
-func IsBadSem(s int) bool {
-	return s < 0 || s >= NSEM
+func IsBadSem(s Sid32) bool {
+	return s < 0 || int(s) >= NSEM
+}
+
+// Wait function cause current process to wait on a semaphore
+func Wait(sem Sid32) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadSem(sem) {
+		return ErrSYSERR
+	}
+
+	semptr := &SemTab[sem]
+	if semptr.SState == SFree {
+		return ErrSYSERR
+	}
+
+	semptr.SCount--
+	
+	if semptr.SCount < 0 {  // semaphore is not enough, current process must wait
+		prptr := &Proctab[CurrPid]
+		prptr.PrState = PrWait
+		prptr.PrSem = sem
+
+		// enqueue current process at the corresponding semaphore queue
+		Enqueue(CurrPid, semptr.SQueue)
+		// rescheduling another process to run
+		Resched()
+		// resume running when returned from Resched() after another process signal it
+	}
+
+	// semaphore is enough or signaled from another process
+	return OK
 }
