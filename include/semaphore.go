@@ -132,3 +132,65 @@ func SemCreate(count int32) (Sid32, error) {
 
 	return sem, OK
 }
+
+// SemDelete function delete a semaphore by releasing its table entry, and free all waiting processes
+func SemDelete(sem Sid32) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadSem(sem) {
+		return ErrSYSERR
+	}
+
+	semptr := &SemTab[sem]
+	if semptr.SState == SFree { // free entry no need to delete
+		return ErrEMPTY
+	}
+
+	semptr.SState = SFree
+
+	// defer resheduling before all the 
+	// waiting processes are released from this semaphore waiting queue
+	ReschedCntl(DeferStart)
+	for ; semptr.SCount < 0; semptr.SCount++ {
+		pid, err := GetFirst(semptr.SQueue)
+		if err != OK {
+			return err
+		}
+
+		err = Ready(pid)
+		if err != OK {
+			return err
+		}
+	}
+	ReschedCntl(DeferStop)
+
+	return OK
+}
+
+// SemReset function reset a semaphore's count and release waiting processes
+// SemReset reuses a used semaphore entry instead of allocating a new one
+func SemReset(sem Sid32, count int32) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	if count <= 0 || IsBadSem(sem) || SemTab[sem].SState == SFree {
+		return ErrSYSERR
+	}
+
+	semptr := &SemTab[sem]
+	semqueue := semptr.SQueue
+
+	// defer rescheduling before free all the waiting processes
+	ReschedCntl(DeferStart)
+	for pid, err := GetFirst(semqueue); err == OK; {
+		e := Ready(pid)
+		if e != OK {
+			return e
+		}
+	}
+	semptr.SCount = count // new count for resetted semaphore
+	ReschedCntl(DeferStop)
+
+	return OK
+}
