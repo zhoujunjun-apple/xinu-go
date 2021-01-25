@@ -29,6 +29,9 @@ const NoneQid Qid16 = -1
 // NonePri represent the universal invalid priority value
 const NonePri Pri16 = -11111
 
+// NoneSem represent the universal invalid semaphore id
+const NoneSem Sid32 = -1
+
 // QUANTUM is the time slice in milliseconds
 const QUANTUM uint8 = 2
 

@@ -33,6 +33,9 @@ type SEntry struct {
 // SemTab is the semaphore table
 var SemTab []SEntry
 
+// NextSem is the next semaphore index to try to allocate, used by NewSem()
+var NextSem Sid32 = 0
+
 // IsBadSem function checks if semaphore id is bad
 func IsBadSem(s Sid32) bool {
 	return s < 0 || int(s) >= NSEM
@@ -94,4 +97,38 @@ func Signal(sem Sid32) error {
 	}
 
 	return OK
+}
+
+// NewSem function allocate an unused semaphore and return its index
+func NewSem() (Sid32, error) {
+	for i := 0; i < NSEM; i++ {
+		sem := NextSem  // current semaphore index to try
+
+		NextSem++
+		if int(NextSem) >= NSEM {
+			NextSem = 0 // round back to index zero
+		}
+
+		if SemTab[sem].SState == SFree {  // found a free semaphore entry to use
+			SemTab[sem].SState = SUsed
+			return sem, OK
+		}
+	}
+
+	return NoneSem, ErrSYSERR
+}
+
+// SemCreate function create a new semaphore and return the ID to the caller
+func SemCreate(count int32) (Sid32, error) {
+	mask := Disable()
+	defer Restore(mask)
+
+	sem, err := NewSem()
+	if count <= 0 || err != OK {
+		return NoneSem, ErrSYSERR
+	}
+
+	SemTab[sem].SCount = count
+
+	return sem, OK
 }
