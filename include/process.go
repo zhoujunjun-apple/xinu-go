@@ -301,3 +301,9 @@ func NewPid() (Pid32, error) {
 
 	return NonePid, ErrSYSERR
 }
+
+// Kill function kill a process and remove it from the system
+func Kill(pid Pid32) error {
+	// TODO: implement it
+	return OK
+}
