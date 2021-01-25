@@ -69,10 +69,56 @@ func InsertDelta(pid Pid32, q Qid16, key int32) error {
 	return OK
 }
 
-// Unsleep function removes a process from the sleep queue.
+// Unsleep function removes a process from the sleep queue prematurely.
 func Unsleep(pid Pid32) error {
-	// TODO
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadPid(pid) {
+		return ErrSYSERR
+	}
+
+	prptr := &Proctab[pid]
+	if prptr.PrState != PrSleep && prptr.PrState != PrRecTime {
+		// candidate process must on the sleep queue
+		return ErrSYSERR
+	}
+
+	pidNext := Queuetab[pid].Qnext
+	if int(pidNext) < NPROC {  // make sure pidNext not head or tail node
+		// add the extra delay because process pid's sleep not actually end
+		Queuetab[pidNext].Qkey += Queuetab[pid].Qkey
+	}
+
+	// get pid out of delta list
+	GetItem(pid)
+
 	return OK
+}
+
+// Wakeup function called by clock interrupt handler to awaken processes.
+// It is different with Unsleep() because Wakeup() only called when it IS 
+// the time to awaken processes since they have sleeped JUST ENOUGH time
+func Wakeup() {
+	ReschedCntl(DeferStart)
+	defer ReschedCntl(DeferStop)
+
+	// if delta list is: 0 -> 0 -> 0 -> 2 -> ...,
+	// then first three process's sleep period has end.
+	for NonEmpty(sleepq) && FirstKey(sleepq) <= 0 {
+		pid, err := Dequeue(sleepq)
+		if err != OK {
+			return
+		}
+
+		err = Ready(pid)
+		if err != OK {
+			return
+		}
+	}
+
+	return
+	
 }
 
 // Sleep function delay the calling process 'delay' seconds
