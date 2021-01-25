@@ -18,6 +18,9 @@ clock.h
 insertd.c
 unsleep.c
 sleep.c
+wakeup.c
+sleepms.c
+recvtime.c
 
 */
 
@@ -47,7 +50,7 @@ func InsertDelta(pid Pid32, q Qid16, key int32) error {
 	next := Queuetab[prev].Qnext
 
 	// search the delta list until the tail node reached or
-	// a right position is find for insert  
+	// a right position is find for insert
 	for next != QueueTail(q) && Queuetab[next].Qkey <= key {
 		// time delay if all the previous nodes awaken
 		key -= Queuetab[next].Qkey
@@ -85,7 +88,7 @@ func Unsleep(pid Pid32) error {
 	}
 
 	pidNext := Queuetab[pid].Qnext
-	if int(pidNext) < NPROC {  // make sure pidNext not head or tail node
+	if int(pidNext) < NPROC { // make sure pidNext not head or tail node
 		// add the extra delay because process pid's sleep not actually end
 		Queuetab[pidNext].Qkey += Queuetab[pid].Qkey
 	}
@@ -97,7 +100,7 @@ func Unsleep(pid Pid32) error {
 }
 
 // Wakeup function called by clock interrupt handler to awaken processes.
-// It is different with Unsleep() because Wakeup() only called when it IS 
+// It is different with Unsleep() because Wakeup() only called when it IS
 // the time to awaken processes since they have sleeped JUST ENOUGH time
 func Wakeup() {
 	ReschedCntl(DeferStart)
@@ -118,7 +121,7 @@ func Wakeup() {
 	}
 
 	return
-	
+
 }
 
 // Sleep function delay the calling process 'delay' seconds
@@ -127,7 +130,7 @@ func Sleep(delay uint32) error {
 		return ErrSYSERR
 	}
 
-	err := Sleepms(delay*1000)
+	err := Sleepms(delay * 1000)
 	return err
 }
 
@@ -152,4 +155,37 @@ func Sleepms(delayms uint32) error {
 	Resched()
 
 	return OK
+}
+
+// RecvTime function wait specified time to receive a message and return
+// maxWait: ticks to wait before time out
+func RecvTime(maxWait int32) (Umsg32, error) {
+	if maxWait < 0 {
+		return NoneMsg, ErrSYSERR
+	}
+
+	mask := Disable()
+	defer Restore(mask)
+
+	prptr := &Proctab[CurrPid]
+	if prptr.PrHasMsg == false { // no message available yet
+		// sleep maxWait time waiting for message
+		err := InsertDelta(CurrPid, sleepq, maxWait)
+		if err != OK {
+			return NoneMsg, ErrSYSERR
+		}
+
+		prptr.PrState = PrRecTime
+		Resched()
+		// message arrived or sleep time out
+	}
+
+	// either message available or timer expired
+	msg := TimeoutMsg
+	if prptr.PrHasMsg { // message available
+		msg = prptr.PrMsg
+		prptr.PrHasMsg = false
+	}
+
+	return msg, OK
 }

@@ -35,6 +35,9 @@ const NonePri Pri16 = -11111
 // NoneSem represent the universal invalid semaphore id
 const NoneSem Sid32 = -1
 
+// TimeoutMsg represent the TimeOut message
+const TimeoutMsg Umsg32 = math.MaxUint32 - 1
+
 // NoneMsg represent the universal invalid message content
 const NoneMsg Umsg32 = math.MaxUint32
 
