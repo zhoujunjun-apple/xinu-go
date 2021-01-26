@@ -10,6 +10,7 @@ The reimplemented modules include:<br>
 3. semaphore management, including create, delete and reset semaphore. Waiting on a semaphore and signal the arrival of release of semaphore. All in semaphore.go file; <br>
 4. Lower-level IPC of message. Including the message send and receive, in file message.go; <br>
 5. process preemption and time-delay function, implemented in separate clock.go file; <br>
+6. High-level message passing with ports. It supports message queuing, synchronously sending messages to a port, synchronously receiving messages from a port. It very much like the golang's channel. ^_^; <br> 
 
 Some modifications compared with the original [X86 version Xinu](https://xinu.cs.purdue.edu/files/Xinu-code-Galileo.tar.gz) : <br>
 1. Header files and C source code files, which share some similarity in functionality, have been combined into a single .go file. So most .c files under the 'system' directory have combined into .go files under the 'include' directory ; <br>
