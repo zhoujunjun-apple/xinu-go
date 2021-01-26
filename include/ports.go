@@ -3,6 +3,9 @@
 files combined from the original X86 version include:
 ports.h
 ptinit.c
+ptcreate.c
+ptsend.c
+ptrecv.c
 
 */
 
@@ -55,6 +58,11 @@ var PtNextID int
 
 // ptfree is the head of global list of free message node
 var ptfree *MsgNode
+
+// IsBadPort function check if portid is bad
+func IsBadPort(portid int32) bool {
+	return portid < 0 || portid >= int32(MaxPorts)
+}
 
 // PtInit function initialize all ports and initialize the free message list
 func PtInit(maxmsgs int32) error {
@@ -125,4 +133,56 @@ func PtCreate(count uint16) (int, error) {
 	}
 
 	return -1, ErrEMPTY
+}
+
+// PtSend function send a message to a port by adding it to the tail of queue
+func PtSend(portid int32, msg Umsg32) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadPort(portid) {
+		return ErrSYSERR
+	}
+
+	ptptr := &PortTab[portid]
+	if ptptr.PtState != PtStateAlloc {
+		// message can only send to allocated port
+		return ErrSYSERR
+	}
+
+	seq := ptptr.PtSeq // record the orignal sequence
+	if Wait(ptptr.PtSsem) != OK || ptptr.PtState != PtStateAlloc || ptptr.PtSeq != seq {
+		// because Wait() could cause current process into waitting queue,
+		// the portid-th entry in port table could be deleted or reseted by another process.
+		// so we need to recheck its state and sequence
+		return ErrSYSERR
+	}
+
+	if ptfree == nil {
+		// there is no more free message node
+		return ErrEMPTY
+	}
+
+	// obtain node from free list by unlinking
+	msgNode := ptfree
+	ptfree = msgNode.PtNext
+
+	// copy the input msg into it
+	msgNode.PtNext = nil
+	msgNode.PtMsg = msg
+
+	// link into queue for the portid port entry
+	tailNode := ptptr.PtTail
+	if tailNode == nil {
+		ptptr.PtHead = msgNode
+		ptptr.PtTail = msgNode
+	} else {
+		tailNode.PtNext = msgNode
+		ptptr.PtTail = msgNode
+	}
+
+	// let the reveiver know that there is msg avilable
+	Signal(ptptr.PtRsem)
+
+	return OK
 }

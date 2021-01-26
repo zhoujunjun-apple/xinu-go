@@ -60,7 +60,7 @@ func Wait(sem Sid32) error {
 
 	semptr.SCount--
 
-	if semptr.SCount < 0 {  // semaphore is not enough, current process must wait
+	if semptr.SCount < 0 { // semaphore is not enough, current process must wait
 		prptr := &Proctab[CurrPid]
 		prptr.PrState = PrWait
 		prptr.PrSem = sem
@@ -96,7 +96,7 @@ func Signal(sem Sid32) error {
 	if oldCount < 0 { // oldCount processes are waiting on this semaphore
 		// need to release a waiting process from the semaphore waiting queue
 		p, _ := Dequeue(semptr.SQueue)
-		Ready(p)  // could cause a rescheduling
+		Ready(p) // could cause a rescheduling
 	}
 
 	return OK
@@ -105,14 +105,14 @@ func Signal(sem Sid32) error {
 // NewSem function allocate an unused semaphore and return its index
 func NewSem() (Sid32, error) {
 	for i := 0; i < NSEM; i++ {
-		sem := NextSem  // current semaphore index to try
+		sem := NextSem // current semaphore index to try
 
 		NextSem++
 		if int(NextSem) >= NSEM {
 			NextSem = 0 // round back to index zero
 		}
 
-		if SemTab[sem].SState == SFree {  // found a free semaphore entry to use
+		if SemTab[sem].SState == SFree { // found a free semaphore entry to use
 			SemTab[sem].SState = SUsed
 			return sem, OK
 		}
@@ -127,7 +127,7 @@ func SemCreate(count int32) (Sid32, error) {
 	defer Restore(mask)
 
 	sem, err := NewSem()
-	if count <= 0 || err != OK {
+	if count < 0 || err != OK {
 		return NoneSem, ErrSYSERR
 	}
 
@@ -152,7 +152,7 @@ func SemDelete(sem Sid32) error {
 
 	semptr.SState = SFree
 
-	// defer resheduling before all the 
+	// defer resheduling before all the
 	// waiting processes are released from this semaphore waiting queue
 	ReschedCntl(DeferStart)
 	for ; semptr.SCount < 0; semptr.SCount++ {
