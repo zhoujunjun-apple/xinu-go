@@ -135,7 +135,8 @@ func PtCreate(count uint16) (int, error) {
 	return -1, ErrEMPTY
 }
 
-// PtSend function send a message to a port by adding it to the tail of queue
+// PtSend function send a message to a port by adding
+// it to the tail of queue, blocking it if port is full.
 func PtSend(portid int32, msg Umsg32) error {
 	mask := Disable()
 	defer Restore(mask)
@@ -185,4 +186,46 @@ func PtSend(portid int32, msg Umsg32) error {
 	Signal(ptptr.PtRsem)
 
 	return OK
+}
+
+// PtRecv function reveive a message from a port, blocking if port empty
+func PtRecv(portid int32) (Umsg32, error) {
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadPort(portid) {
+		return NoneMsg, ErrSYSERR
+	}
+
+	ptptr := &PortTab[portid]
+	if ptptr.PtState != PtStateAlloc {
+		// can only reveive message from allocated port
+		return NoneMsg, ErrEMPTY
+	}
+
+	seq := ptptr.PtSeq
+	if Wait(ptptr.PtRsem) != OK || ptptr.PtState != PtStateAlloc || ptptr.PtSeq != seq {
+		// similar recheck with PtSend()
+		return NoneMsg, ErrSYSERR
+	}
+
+	// dequeue first message that is waiting in the port
+	msgNode := ptptr.PtHead
+	msg := msgNode.PtMsg
+
+	if ptptr.PtHead == ptptr.PtTail { // delete last node
+		ptptr.PtHead = nil
+		ptptr.PtTail = nil
+	} else {
+		ptptr.PtHead = msgNode.PtNext
+	}
+
+	// msgNode return to free list
+	msgNode.PtNext = ptfree
+	ptfree = msgNode
+
+	// let sender know that a message has been received
+	Signal(ptptr.PtSsem)
+
+	return msg, OK
 }
