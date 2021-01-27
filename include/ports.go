@@ -6,12 +6,16 @@ ptinit.c
 ptcreate.c
 ptsend.c
 ptrecv.c
+ptclear.c
+ptreset.c
+ptdelete.c
 
 */
 
 package include
 
 import (
+	"fmt"
 	"unsafe"
 )
 
@@ -31,6 +35,9 @@ const (
 	PtStateAlloc uint16 = 3
 )
 
+// DisposeFunc function specify how to dispose of messages when deleting or reseting port
+type DisposeFunc func(Umsg32) error
+
 // MsgNode struct is a node on list of messages
 type MsgNode struct {
 	PtMsg  Umsg32   // a one-word message
@@ -43,7 +50,7 @@ type PtEntry struct {
 	PtRsem Sid32 // receiver semaphore
 
 	PtState  uint16 // port state: free, limbo, alloc
-	PtMaxCnt uint16 // max messages to be queued
+	PtMaxCnt uint16 // max messages to be queued, used in port reset
 	PtSeq    int32  // sequence change at creation. much like the sequence number of TCP
 
 	PtHead *MsgNode // head of message list
@@ -155,7 +162,7 @@ func PtSend(portid int32, msg Umsg32) error {
 	if Wait(ptptr.PtSsem) != OK || ptptr.PtState != PtStateAlloc || ptptr.PtSeq != seq {
 		// because Wait() could cause current process into waitting queue,
 		// the portid-th entry in port table could be deleted or reseted by another process.
-		// so we need to recheck its state and sequence
+		// so we need to recheck its state and sequence after switch back
 		return ErrSYSERR
 	}
 
@@ -228,4 +235,52 @@ func PtRecv(portid int32) (Umsg32, error) {
 	Signal(ptptr.PtSsem)
 
 	return msg, OK
+}
+
+// _ptclear function used by PtDelete and PtReset to delete or reset
+// a port (internal function assumes interrupts disabled and arguments
+// have been checked for validity )
+// ptptr: the port entry to be deleted or reseted;
+// newstate: the new state for the port entry;
+// dispose: the dispose function that user desired;
+func _ptclear(ptptr *PtEntry, newstate uint16, dispose DisposeFunc) {
+	// place port in limbo state while waiting processes's message are freed
+	ptptr.PtState = PtStateLimbo
+
+	// always increase port sequence number
+	ptptr.PtSeq++
+
+	walk := ptptr.PtHead
+	if walk != nil { // message list nonempty
+		for ; walk != nil; walk = walk.PtNext { // dispose remaining message
+			err := dispose(walk.PtMsg) // could cause a rescheduling
+			if err != OK {
+				fmt.Printf("dispose message error: %v", err)
+			}
+		}
+
+		// link entire message list back to the free list
+		(ptptr.PtTail).PtNext = ptfree
+		ptfree = ptptr.PtHead
+
+		// clear the head pointer and tail pointer of message list
+		ptptr.PtTail = nil
+		ptptr.PtHead = nil
+	}
+
+	if newstate == PtStateAlloc {
+		// reset the port semaphore back to the original
+		SemReset(ptptr.PtRsem, 0)
+		SemReset(ptptr.PtSsem, int32(ptptr.PtMaxCnt))
+	} else {
+		// delete the semaphores
+		SemDelete(ptptr.PtRsem)
+		SemDelete(ptptr.PtSsem)
+		ptptr.PtMaxCnt = 0
+	}
+
+	// update the new state
+	ptptr.PtState = newstate
+
+	return
 }
