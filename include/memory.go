@@ -172,11 +172,88 @@ func GetStk(nbytes uint32) (unsafe.Pointer, error) {
 	// operation would consume 32 bits memory. When returned from GetStk
 	// function, the 4 bytes memory pointed by retFits, as follows, is 
 	// converted to *uint32 type and used, in Create() function, to save 
-	// the StackMagic constants. 
+	// the StackMagic constants of uint32 type. 
 	// lower address        retFits                    higher address
 	//                       \|/
 	// | byte | byte | .....  |      |      |      |      |
 	//                         <-- first push consumes -->
 
 	return retFits, OK
+}
+
+// FreeMem function free a memory block, pointed by blkaddr, returning 
+// the block to the free memory list. The nbytes arg specify the size
+// of block to be freed in bytes.
+func FreeMem(blkaddr unsafe.Pointer, nbytes uint32) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	if nbytes == 0 || uintptr(blkaddr) < uintptr(minheap) || uintptr(blkaddr) > uintptr(maxheap) {
+		return ErrSYSERR
+	}
+
+	nbytes = uint32(RoundMB(int32(nbytes)))
+	block := (*MemBlk)(blkaddr)
+
+	prev := &freememlist
+	next := freememlist.MNext
+
+	// the free memory list are ordered by the physical address in ascending order
+	for next != nil && uintptr(unsafe.Pointer(next)) < uintptr(blkaddr) {
+		prev = next
+		next = next.MNext
+	}
+
+	// topPrev is the top position of previous block
+	var topPrev *MemBlk
+	if prev == &freememlist {
+		topPrev = nil
+	} else {
+		topPrev = (*MemBlk)(unsafe.Pointer(uintptr(unsafe.Pointer(prev)) + uintptr(prev.MLength)))
+	}
+
+	/*
+	prev             topPrev    block       block+nbytes      next        next+next.MLength
+    \|/                 \|/      \|/             \|/          \|/           \|/  
+	 |-------------------|++++++++|---------------|++++++++++++|-------------|
+	*/
+
+	// check if the blkaddr block overlap previous block
+	overlapPrev := prev != &freememlist && uintptr(unsafe.Pointer(block)) < uintptr(unsafe.Pointer(topPrev)) 
+	
+	// check if the blkaddr block overlap next block
+	overlapNext := next != nil && (uintptr(unsafe.Pointer(block)) + uintptr(nbytes)) > uintptr(unsafe.Pointer(next))
+	
+	if overlapPrev || overlapNext {  // should not overlap
+		return ErrSYSERR
+	}
+
+	freememlist.MLength += nbytes
+
+	if topPrev == block {// coalesce with previous block, blend into the previous
+		prev.MLength += nbytes
+		block = prev
+	} else { // not coalesce, link into list as new node
+		block.MNext = next
+		block.MLength = nbytes
+		prev.MNext = block
+	}
+
+	// check if it coalesce with next block
+	if uintptr(unsafe.Pointer(next)) == uintptr(unsafe.Pointer(block)) + uintptr(block.MLength) {
+		// ..., the next block is blend into it
+		block.MLength += next.MLength
+		block.MNext = next.MNext
+	}
+
+	return OK
+}
+
+// FreeStk function free stack memory allocated by GetStk
+func FreeStk(blkaddr unsafe.Pointer, nbytes uint32) error {
+	// the converse operation with the retFits in GetStk
+	nbytes = uint32(RoundMB(int32(nbytes)))
+	realaddr := unsafe.Pointer(uintptr(blkaddr) - uintptr(nbytes) + unsafe.Sizeof(uint32(1)))
+	
+	return FreeMem(realaddr, nbytes)
 }
