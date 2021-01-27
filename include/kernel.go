@@ -3,6 +3,7 @@ package include
 import (
 	"fmt"
 	"math"
+	"unsafe"
 )
 
 // Qid16 is the process queue ID
@@ -40,6 +41,12 @@ const TimeoutMsg Umsg32 = math.MaxUint32 - 1
 
 // NoneMsg represent the universal invalid message content
 const NoneMsg Umsg32 = math.MaxUint32
+
+// None is the null address value
+const None uintptr = 0
+
+// NonePointer represent a fake null pointer
+var NonePointer unsafe.Pointer = unsafe.Pointer(None)
 
 // QUANTUM is the time slice in milliseconds
 const QUANTUM uint8 = 2
