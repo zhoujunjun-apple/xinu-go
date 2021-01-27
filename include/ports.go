@@ -61,7 +61,7 @@ type PtEntry struct {
 var PortTab [MaxPorts]PtEntry
 
 // PtNextID is the next table entry to try in PortTab
-var PtNextID int
+var PtNextID int32
 
 // ptfree is the head of global list of free message node
 var ptfree *MsgNode
@@ -105,7 +105,7 @@ func PtInit(maxmsgs int32) error {
 }
 
 // PtCreate function create a port that allows 'count' outstanding messages
-func PtCreate(count uint16) (int, error) {
+func PtCreate(count uint16) (int32, error) {
 	mask := Disable()
 	defer Restore(mask)
 
@@ -118,7 +118,7 @@ func PtCreate(count uint16) (int, error) {
 
 		// update PtNextID for next try
 		PtNextID++
-		if PtNextID >= MaxPorts {
+		if PtNextID >= int32(MaxPorts) {
 			PtNextID = 0
 		}
 
@@ -244,7 +244,8 @@ func PtRecv(portid int32) (Umsg32, error) {
 // newstate: the new state for the port entry;
 // dispose: the dispose function that user desired;
 func _ptclear(ptptr *PtEntry, newstate uint16, dispose DisposeFunc) {
-	// place port in limbo state while waiting processes's message are freed
+	// place port in limbo state while waiting processes are
+	// freed and messages are disposed
 	ptptr.PtState = PtStateLimbo
 
 	// always increase port sequence number
@@ -269,11 +270,12 @@ func _ptclear(ptptr *PtEntry, newstate uint16, dispose DisposeFunc) {
 	}
 
 	if newstate == PtStateAlloc {
-		// reset the port semaphore back to the original
+		// reset the port semaphore back to the original and
+		// free those waiting processes
 		SemReset(ptptr.PtRsem, 0)
 		SemReset(ptptr.PtSsem, int32(ptptr.PtMaxCnt))
 	} else {
-		// delete the semaphores
+		// delete the semaphores and free those waiting processes
 		SemDelete(ptptr.PtRsem)
 		SemDelete(ptptr.PtSsem)
 		ptptr.PtMaxCnt = 0
@@ -283,4 +285,46 @@ func _ptclear(ptptr *PtEntry, newstate uint16, dispose DisposeFunc) {
 	ptptr.PtState = newstate
 
 	return
+}
+
+// PtDelete function delete a port, freeing waiting processes and message
+func PtDelete(portid int32, disp DisposeFunc) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadPort(portid) {
+		return ErrSYSERR
+	}
+
+	ptptr := &PortTab[portid]
+	if ptptr.PtState != PtStateAlloc {
+		return ErrSYSERR
+	}
+
+	_ptclear(ptptr, PtStateFree, disp)
+
+	// deleted port entry is the next port id to be allocated
+	PtNextID = portid
+
+	return OK
+}
+
+// PtReset function reset the port state back to the
+// original like when it just have been created
+func PtReset(portid int32, disp DisposeFunc) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	if IsBadPort(portid) {
+		return ErrSYSERR
+	}
+
+	ptptr := &PortTab[portid]
+	if ptptr.PtState != PtStateAlloc {
+		return ErrSYSERR
+	}
+
+	_ptclear(ptptr, PtStateAlloc, disp)
+
+	return OK
 }

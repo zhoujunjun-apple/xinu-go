@@ -177,7 +177,7 @@ func SemReset(sem Sid32, count int32) error {
 	mask := Disable()
 	defer Restore(mask)
 
-	if count <= 0 || IsBadSem(sem) || SemTab[sem].SState == SFree {
+	if count < 0 || IsBadSem(sem) || SemTab[sem].SState == SFree {
 		return ErrSYSERR
 	}
 
