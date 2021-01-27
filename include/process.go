@@ -18,8 +18,8 @@ chprio.c
 package include
 
 import (
-	"unsafe"
 	"reflect"
+	"unsafe"
 )
 
 // process state constants
@@ -43,7 +43,7 @@ const (
 )
 
 // InitRet is the address to which process returns
-var InitRet uintptr = reflect.ValueOf(UserRet).Pointer()  // this may be wrong
+var InitRet uintptr = reflect.ValueOf(UserRet).Pointer() // this may be wrong
 
 // process initialization constants
 const (
@@ -250,7 +250,8 @@ func Create(funcAddr uintptr, ssize uint32, priority Pri16, name [PNMLen]byte, n
 
 	// allocate pid and stack memory for new process
 	pid, pidErr := NewPid()
-	saddr, saddrErr := GetStk(ssize)
+	_saddr, saddrErr := GetStk(ssize)
+	saddr := (*uint32)(_saddr)
 
 	if priority < 1 || pidErr != OK || saddrErr != OK {
 		return NonePid, ErrSYSERR
@@ -282,19 +283,19 @@ func Create(funcAddr uintptr, ssize uint32, priority Pri16, name [PNMLen]byte, n
 	// push arguments
 
 	// Clang statement: a = (uint32*)(&nargs + 1)
-	a := uint32PtrAdd(&nargs, 1)  // a now is the address of start of args (args #1)
+	a := uint32PtrAdd(&nargs, 1) // a now is the address of start of args (args #1)
 
 	// Clang statement: a += nargs - 1;
-	a = uint32PtrAdd(a, nargs - 1)  // a now is the address of last of args (args #nargs)
+	a = uint32PtrAdd(a, nargs-1) // a now is the address of last of args (args #nargs)
 
 	// copy args from current stack to the new process's stack
 	for ; nargs > 0; nargs-- {
 		// Clang statement: *--saddr = *a--;
 
-		saddr = uint32PtrMinus(saddr, 1)  // --saddr
+		saddr = uint32PtrMinus(saddr, 1) // --saddr
 		// copy argument value from current stack onto created process's stack
 		*saddr = *a
-		a = uint32PtrMinus(a, 1)  // a--
+		a = uint32PtrMinus(a, 1) // a--
 	}
 
 	// push on the return address: INITRET
@@ -304,7 +305,7 @@ func Create(funcAddr uintptr, ssize uint32, priority Pri16, name [PNMLen]byte, n
 	// the following entries on the stack must match what  ctxsw
 	// expects a saved process state to contain: ret address,
 	// ebp, interrupt mask, flags, registers, and an old SP
-	
+
 	// make the stack look like it's half-way through a call to ctxsw that "return" to the new process
 	saddr = uint32PtrMinus(saddr, 1)
 	*saddr = uint32(funcAddr)
@@ -317,20 +318,20 @@ func Create(funcAddr uintptr, ssize uint32, priority Pri16, name [PNMLen]byte, n
 	savesp = uintptr(unsafe.Pointer(saddr))
 
 	saddr = uint32PtrMinus(saddr, 1)
-	*saddr = 0x00000200  // new process runs with interrupts enabled
+	*saddr = 0x00000200 // new process runs with interrupts enabled
 
 	// basically, the following emulates an X86 "pushal" instruction
 	saddr = uint32PtrMinus(saddr, 1)
-	*saddr = 0  // %eax
+	*saddr = 0 // %eax
 
 	saddr = uint32PtrMinus(saddr, 1)
-	*saddr = 0  // %ecx
+	*saddr = 0 // %ecx
 
 	saddr = uint32PtrMinus(saddr, 1)
-	*saddr = 0  // %edx
+	*saddr = 0 // %edx
 
 	saddr = uint32PtrMinus(saddr, 1)
-	*saddr = 0  // %ebx
+	*saddr = 0 // %ebx
 
 	pushsp := saddr // remember this location
 
@@ -341,9 +342,9 @@ func Create(funcAddr uintptr, ssize uint32, priority Pri16, name [PNMLen]byte, n
 	*saddr = 0 // %esi
 
 	saddr = uint32PtrMinus(saddr, 1)
-	*saddr = 0  // %edi
+	*saddr = 0 // %edi
 
-	prptr.PrStkPtr = saddr  // record the new process's stack pointer onto PrStkPtr field
+	prptr.PrStkPtr = saddr // record the new process's stack pointer onto PrStkPtr field
 	*pushsp = uint32(uintptr(unsafe.Pointer(saddr)))
 
 	return pid, OK
@@ -356,7 +357,7 @@ func uint32PtrMinus(old *uint32, gap uint32) *uint32 {
 
 	unsafeOld := unsafe.Pointer(old)
 	// DO NOT do: _old := uintptr(unsafeOld) - unsafe.Sizeof(dummy) * uintptr(gap)
-	ret := (*uint32)(unsafe.Pointer(uintptr(unsafeOld) - unsafe.Sizeof(dummy) * uintptr(gap)))
+	ret := (*uint32)(unsafe.Pointer(uintptr(unsafeOld) - unsafe.Sizeof(dummy)*uintptr(gap)))
 
 	return ret
 }
@@ -366,7 +367,7 @@ func uint32PtrAdd(old *uint32, gap uint32) *uint32 {
 	var dummy uint32 = 1
 
 	unsafeOld := unsafe.Pointer(old)
-	ret := (*uint32)(unsafe.Pointer(uintptr(unsafeOld) + unsafe.Sizeof(dummy) * uintptr(gap)))
+	ret := (*uint32)(unsafe.Pointer(uintptr(unsafeOld) + unsafe.Sizeof(dummy)*uintptr(gap)))
 
 	return ret
 }

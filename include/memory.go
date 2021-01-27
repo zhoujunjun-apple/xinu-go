@@ -56,7 +56,9 @@ func TruncMB(x int32) int32 {
 	return x & (^7)
 }
 
-// GetMem function allocate heap storage, returning the lowest word address
+// GetMem function allocate heap storage, returning the lowest word address.
+// This function try to allocate memory from the FIRST adequate memory block
+// of the free memory list. Converse strategy for GetStk().
 func GetMem(nbytes uint32) (unsafe.Pointer, error) {
 	mask := Disable()
 	defer Restore(mask)
@@ -82,7 +84,7 @@ func GetMem(nbytes uint32) (unsafe.Pointer, error) {
 
 		} else if curr.MLength > nbytes { // split big block
 			/* curr      leftover
-			    |---------|-----------------|
+			   |---------|-----------------|
 			    <-nbytes->
 			    <--------curr.MLength------>
 			*/
@@ -109,9 +111,72 @@ func GetMem(nbytes uint32) (unsafe.Pointer, error) {
 	return NonePointer, ErrEMPTY
 }
 
-// GetStk function allocates stack memory, returning highest word address
-// TODO: complete this function
-func GetStk(nbytes uint32) (*uint32, error) {
-	var fakeStk uint32 = 1
-	return &fakeStk, OK
+// GetStk function allocates stack memory, returning highest word address.
+// This function try to allocate memory from the LAST adequate memory 
+// block of the free memory list. Converse strategy for GetMem().
+func GetStk(nbytes uint32) (unsafe.Pointer, error) {
+	mask := Disable()
+	defer Restore(mask)
+
+	if nbytes == 0 {
+		return NonePointer, ErrSYSERR
+	}
+
+	nbytes = uint32(RoundMB(int32(nbytes)))
+	
+	prev := &freememlist
+	curr := freememlist.MNext
+
+	var fits, fitsprev *MemBlk = nil, nil 
+	for curr != nil {
+		if curr.MLength >= nbytes { // find the last adequate memory block
+			fits = curr
+			fitsprev = prev
+		}
+
+		prev = curr
+		curr = curr.MNext
+	}
+
+	if fits == nil {  // no adequate memory block found
+		return NonePointer, ErrEMPTY
+	}
+
+	if fits.MLength == nbytes {  // the block exactly match
+		fitsprev.MNext = fits.MNext
+	} else {
+		fits.MLength -= nbytes
+
+		/*
+	 fitsPointer   fits(the following one)
+	   \|/                 \|/
+		|-------------------|----------|
+		 <--fits.MLength---> <-nbytes-->		 
+		*/
+
+		fitsPointer := unsafe.Pointer(fits)
+		fits = (*MemBlk)((unsafe.Pointer)(uintptr(fitsPointer) + uintptr(fits.MLength)))
+	}
+
+	freememlist.MLength -= nbytes
+
+	// retFits point to the piece from the highest part of the selected block
+	fitsPointer := unsafe.Pointer(fits)
+	retFits := (unsafe.Pointer)(
+		uintptr(fitsPointer) + 
+	    uintptr(nbytes) - 
+		unsafe.Sizeof(uint32(1)))
+	// Minus sizeof(uint32) from the fitsPointer is because
+	// the xinu os assumed the underlying hardware is 32 bits pattern.
+	// And GetStk function is used for allocating stack memory, each push 
+	// operation would consume 32 bits memory. When returned from GetStk
+	// function, the 4 bytes memory pointed by retFits, as follows, is 
+	// converted to *uint32 type and used, in Create() function, to save 
+	// the StackMagic constants. 
+	// lower address        retFits                    higher address
+	//                       \|/
+	// | byte | byte | .....  |      |      |      |      |
+	//                         <-- first push consumes -->
+
+	return retFits, OK
 }
