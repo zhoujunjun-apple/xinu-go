@@ -134,3 +134,40 @@ func GetBuf(poolid Bpid32) (unsafe.Pointer, error) {
 
 	return retptr, OK
 }
+
+// FreeBuf function free a buffer that was allocated from a poll by GetBuf
+func FreeBuf(bufaddr unsafe.Pointer) error {
+	mask := Disable()
+	defer Restore(mask)
+
+	// extract pool id from integer prior to buffer address
+	bufaddr = unsafe.Pointer(uintptr(bufaddr) - unsafe.Sizeof(Bpid32(0)))
+	poolid := *(*Bpid32)(bufaddr)
+	// bufaddr(new)            bpptr.BpNext
+	// \|/                   \|/
+	//  [poolid|ValidBuffSize][BpNext|             ][  nil |             ]
+	//        /|\                 |                /|\
+	//       bufaddr(old)          \----------------/ remaining buffer pool now
+	
+	if poolid < 0 || poolid >= nbpools {
+		return ErrSYSERR
+	}
+
+	// get address of correct pool entry in table
+	bpptr := &BuffPoolTab[poolid]
+
+	// insert buffer into buffer list
+	((*BpEntry)(bufaddr)).BpNext = bpptr.BpNext
+	bpptr.BpNext = (*BpEntry)(bufaddr)
+	//  the remaining buffer pool now
+	//  /---------------------\           
+	//  |                     \|/
+	//  [BpNext|ValidBuffSize][BpNext|             ][  nil |             ]
+	// /|\                        |                /|\
+	// bpptr.BpNext               \----------------/ 
+
+	// signal semaphore
+	Signal(bpptr.BpSem)
+
+	return OK
+}
