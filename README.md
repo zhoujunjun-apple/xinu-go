@@ -14,6 +14,7 @@ The reimplemented modules include:<br>
 5. process preemption and time-delay function, implemented in separate clock.go file; <br>
 6. High-level message passing with ports. It supports message queuing, synchronously sending messages to a port, synchronously receiving messages from a port. It very much like the golang's channel. ^_^; <br> 
 7. Basic memory management, including allocation and free of heap and stack memory at oppositon direction, all in memory.go file; <br>
+8. Buffer pool management, including allocating and freeing of buffer from pool, which has limited memory. Buffer pool is one of the memory partition mechanism that split free memory into independent subsets. Thus, the system can guarantee that excessive requests will not lead to global deprivation.<br>
 
 
 Some modifications compared with the original [X86 version Xinu](https://xinu.cs.purdue.edu/files/Xinu-code-Galileo.tar.gz) : <br>
