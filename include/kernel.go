@@ -24,6 +24,9 @@ type Umsg32 uint32
 // IntMask is the interrupt mask type
 type IntMask uint32
 
+// Bpid32 is the buffer pool id type
+type Bpid32 int32
+
 // NonePid represent the universal invalid process id
 const NonePid Pid32 = -1
 
@@ -41,6 +44,9 @@ const TimeoutMsg Umsg32 = math.MaxUint32 - 1
 
 // NoneMsg represent the universal invalid message content
 const NoneMsg Umsg32 = math.MaxUint32
+
+// NoneBpid represent the universal invalid buffer pool id
+const NoneBpid Bpid32 = -1
 
 // None is the null address value
 const None uintptr = 0

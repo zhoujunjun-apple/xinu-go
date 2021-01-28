@@ -73,11 +73,12 @@ func IsBadPort(portid int32) bool {
 
 // PtInit function initialize all ports and initialize the free message list
 func PtInit(maxmsgs int32) error {
-	// TODO: ptfree = GetMem()
-	err := OK
+	_ptfree, err := GetMem(uint32(unsafe.Sizeof(MsgNode{}) * uintptr(maxmsgs)))
 	if err != OK {
 		return err
 	}
+
+	ptfree = (*MsgNode)(_ptfree)
 
 	// allocate port entry starting from index 0
 	PtNextID = 0
