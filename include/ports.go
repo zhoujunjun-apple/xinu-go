@@ -94,7 +94,7 @@ func PtInit(maxmsgs int32) error {
 	for maxmsgs--; maxmsgs > 0; curr = next {
 		// ++next
 		nextPtr := unsafe.Pointer(next)
-		next = (*MsgNode)(unsafe.Pointer(uintptr(nextPtr) + 1))
+		next = (*MsgNode)(unsafe.Pointer(uintptr(nextPtr) + unsafe.Sizeof(MsgNode{})))
 
 		curr.PtNext = next
 	}

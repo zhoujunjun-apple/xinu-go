@@ -20,11 +20,11 @@ const (
 
 // MemBlk struct represent the basic memory management entry
 type MemBlk struct {
-	// MLength is the size of memory block including itself
-	MLength uint32
-
 	// MNext is the pointer to next free memory block
 	MNext *MemBlk
+
+	// MLength is the size of memory block including itself
+	MLength uint32
 }
 
 // freememlist is the head of free memory block list. renamed from 'memlist'
