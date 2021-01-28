@@ -27,6 +27,7 @@ const (
 // BpEntry struct is the description of a single buffer pool
 type BpEntry struct {
 	// BpNext point to next free buffer
+	// The BpNext field must be the first field. See MakeBufPool() function.
 	BpNext *BpEntry
 	// BpSem is the semaphore that counts buffers currently available in the pool
 	BpSem Sid32
@@ -62,7 +63,7 @@ func MakeBufPool(bufsize int32, numbufs int32) (Bpid32, error) {
 	bufsize = ( (bufsize + 3) & (^3))
 
 	// the first sizeof(Bpid32) bytes are used for saving pool id 
-	// when allocating buffers from this pool
+	// when allocating buffers from this pool.
 	reqMem := numbufs * (bufsize + int32(unsafe.Sizeof(Bpid32(0))))
 	buf, err := GetMem(uint32(reqMem))
 	if err != OK {
@@ -86,11 +87,18 @@ func MakeBufPool(bufsize int32, numbufs int32) (Bpid32, error) {
 	// bufsize now is the dividing uint size
 	bufsize += int32(unsafe.Sizeof(Bpid32(0)))
 	//  links the buffers together
+	// for now, the first sizeof(Bpid32) bytes are used for saving
+	// the BpNext field. The BpNext field must be the FIRST positon
+	// in BpEntry struct.
 	for numbufs--; numbufs > 0; numbufs-- {
 		bpptr = (*BpEntry)(buf)
 		buf = (unsafe.Pointer)(uintptr(buf) + uintptr(bufsize))
 		bpptr.BpNext = (*BpEntry)(buf)
 	}
+	//     /-----------------\ point to here
+	//     |                 \|/
+	//  [BpNext|ValidBuffSize][      |             ][  nil |             ]
+	//                         <-------bufsize----->
 
 	bpptr = (*BpEntry)(buf)
 	bpptr.BpNext = nil
