@@ -4,7 +4,8 @@ buffpool.go buffer pool manager
 files combined from the original X86 version include:
 buffpool.h
 bufinit.c
-
+getbuf.c
+freebuf.c
 
 */
 
@@ -104,4 +105,32 @@ func MakeBufPool(bufsize int32, numbufs int32) (Bpid32, error) {
 	bpptr.BpNext = nil
 
 	return poolid, OK
+}
+
+// GetBuf function  get a buffer from a preestablished buffer pool
+func GetBuf(poolid Bpid32) (unsafe.Pointer, error) {
+	mask := Disable()
+	defer Restore(mask)
+
+	if poolid < 0 || poolid >= nbpools {
+		return NonePointer, ErrSYSERR
+	}
+
+	bpptr := &BuffPoolTab[poolid]
+	Wait(bpptr.BpSem)
+	bufptr := bpptr.BpNext
+
+	bpptr.BpNext = bufptr.BpNext
+
+	bufPidPtr := (*Bpid32)((unsafe.Pointer(bufptr)))
+	*bufPidPtr = poolid
+	// bufptr            bpptr.BpNext
+	// \|/                   \|/
+	//  [poolid|ValidBuffSize][BpNext|             ][  nil |             ]
+	//        /|\                 |                /|\
+	//       retptr                \----------------/ remaining buffer pool
+
+	retptr := unsafe.Pointer(uintptr(unsafe.Pointer(bufptr)) + unsafe.Sizeof(Bpid32(0)))
+
+	return retptr, OK
 }
